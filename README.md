@@ -1,9 +1,4 @@
-# launcher
-
-Shared tools for project deployment. Currently provides the `flydeploy`
-package for Fly.io deployments.
-
-## flydeploy
+# flydeploy
 
 A Python toolkit that extracts the common deploy/destroy patterns into
 reusable functions. Each project's `deploy.py` and `destroy.py` remain
