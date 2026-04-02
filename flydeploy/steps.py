@@ -178,7 +178,7 @@ def _detect_app_region(app_name):
 
 def setup_postgres(app_name, pg_name=None, *, recover=True,
                    secrets_path=None, region=None,
-                   initial_cluster_size=None):
+                   initial_cluster_size=None, volume_size_gb=1):
     """Set up and attach a Postgres cluster.
 
     pg_name:              cluster name (defaults to {app_name}-db).
@@ -192,6 +192,9 @@ def setup_postgres(app_name, pg_name=None, *, recover=True,
     initial_cluster_size: number of Postgres machines. If given, passed
                           to 'fly postgres create --initial-cluster-size'
                           to skip the default of 2.
+    volume_size_gb:       volume size in GB (default 1). Always passed to
+                          'fly postgres create --volume-size' to override
+                          Fly's default of 10.
 
     Returns the pg_name used, or None if DATABASE_URL was already set.
     """
@@ -207,7 +210,8 @@ def setup_postgres(app_name, pg_name=None, *, recover=True,
     r = run(["fly", "postgres", "list"], capture=True)
     pg_list = r.stdout or ""
 
-    pg_create_cmd = ["fly", "postgres", "create", "--name", pg_name]
+    pg_create_cmd = ["fly", "postgres", "create", "--name", pg_name,
+                     "--volume-size", str(volume_size_gb)]
     if region:
         pg_create_cmd.extend(["--region", region])
     if initial_cluster_size is not None:
