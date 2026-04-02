@@ -82,7 +82,9 @@ def create_app(app_name):
         sys.exit("Failed to list Fly apps -- check your connection.")
     if app_name in r.stdout:
         return False
-    run(["fly", "apps", "create", app_name])
+    result = run(["fly", "apps", "create", app_name])
+    if result.returncode != 0:
+        sys.exit(f"Failed to create app '{app_name}'.")
     return True
 
 
@@ -195,7 +197,9 @@ def setup_postgres(app_name, pg_name=None, *, recover=True,
             answer = input(
                 "      Destroy and recreate? [y/N]: ").strip().lower()
             if answer in ("y", "yes"):
-                run(["fly", "apps", "destroy", pg_name, "--yes"])
+                r = run(["fly", "apps", "destroy", pg_name, "--yes"])
+                if r.returncode != 0:
+                    sys.exit(f"Failed to destroy cluster '{pg_name}'.")
                 print(f"      Creating Postgres cluster '{pg_name}'...")
                 result = run(
                     ["fly", "postgres", "create", "--name", pg_name],
@@ -263,7 +267,9 @@ def configure_secrets(app_name, defs, *, fast=True, secrets_path):
     for key, sdef in defs.items():
         if sdef.suspended and key in already_set:
             print(f"      {key}: suspended -- removing from Fly")
-            run(["fly", "secrets", "unset", "--app", app_name, key])
+            r = run(["fly", "secrets", "unset", "--app", app_name, key])
+            if r.returncode != 0:
+                print(f"      Warning: failed to unset {key}")
             already_set.discard(key)
 
     to_set = {}
@@ -339,7 +345,9 @@ def configure_secrets(app_name, defs, *, fast=True, secrets_path):
         args = ["fly", "secrets", "set", "--app", app_name]
         for k, v in to_set.items():
             args.append(f"{k}={v}")
-        run(args)
+        r = run(args)
+        if r.returncode != 0:
+            sys.exit("Failed to set secrets on Fly.")
         print(f"      Set {len(to_set)} secret(s).")
     else:
         print("      No new secrets to set.")
