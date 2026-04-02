@@ -82,6 +82,15 @@ def run(cmd, *, cwd=None, capture=False, passthrough=False):
     return proc
 
 
+def ask_mode():
+    """Ask the operator for fast or interactive (review) mode.
+
+    Returns True for fast mode, False for interactive.
+    Every deploy and destroy script must call this at the start.
+    """
+    return input("\nFast mode? [Y/n]: ").strip().lower() in ("", "y", "yes")
+
+
 def prompt(msg, *, required=True, default=None, secret=False):
     """Prompt for user input.
 

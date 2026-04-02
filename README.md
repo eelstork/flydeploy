@@ -7,13 +7,13 @@ short, project-specific scripts that call library functions.
 ### Install
 
 ```bash
-pip install -e path/to/launcher
+pip install -e path/to/flydeploy
 ```
 
 Or from git:
 
 ```bash
-pip install git+https://github.com/eelstork/launcher.git
+pip install git+https://github.com/eelstork/flydeploy.git
 ```
 
 ### Example deploy.py
@@ -22,9 +22,9 @@ pip install git+https://github.com/eelstork/launcher.git
 #!/usr/bin/env python3
 from pathlib import Path
 from flydeploy import (
-    open_log, preflight, find_fly_toml, read_app_name, write_app_name,
-    create_app, setup_postgres, configure_secrets, deploy, smoke_test,
-    save_deployment, SecretDef,
+    ask_mode, open_log, preflight, find_fly_toml, read_app_name,
+    write_app_name, create_app, setup_postgres, configure_secrets,
+    deploy, smoke_test, load_deployment, save_deployment, SecretDef,
 )
 
 ROOT = Path(__file__).parent
@@ -43,19 +43,20 @@ SECRETS = {
 
 if __name__ == "__main__":
     open_log(ROOT / "setup_log.txt", history_dir=ROOT / "setup-history")
-
-    fast = input("\nFast deploy? [Y/n]: ").strip().lower() in ("", "y", "yes")
+    fast = ask_mode()
 
     print("\n[1] Preflight")
     user = preflight()
     print(f"      Logged in as {user}")
 
     print("\n[2] App name")
+    state = load_deployment(DEPLOYMENT_PATH)
     fly_toml = find_fly_toml(ROOT)
-    app_name = read_app_name(fly_toml)
-    if app_name == PLACEHOLDER:
+    app_name = state.get("app_name") or read_app_name(fly_toml)
+    if not app_name or app_name == PLACEHOLDER:
         app_name = input("  App name: ").strip()
-        write_app_name(fly_toml, app_name, placeholder=PLACEHOLDER)
+    write_app_name(fly_toml, app_name, placeholder=PLACEHOLDER)
+    save_deployment(DEPLOYMENT_PATH, app_name=app_name)
 
     print("\n[3] Create app")
     created = create_app(app_name)
@@ -63,6 +64,7 @@ if __name__ == "__main__":
 
     print("\n[4] Postgres")
     pg_name = setup_postgres(app_name, secrets_path=SECRETS_PATH)
+    save_deployment(DEPLOYMENT_PATH, pg_name=pg_name)
 
     print("\n[5] Secrets")
     configure_secrets(app_name, SECRETS, fast=fast,
@@ -74,7 +76,7 @@ if __name__ == "__main__":
     print("\n[7] Smoke test")
     smoke_test(app_name)
 
-    save_deployment(DEPLOYMENT_PATH, app_name=app_name, pg_name=pg_name)
+    save_deployment(DEPLOYMENT_PATH, user=user)
     print("\nDone.")
 ```
 
@@ -84,7 +86,7 @@ if __name__ == "__main__":
 #!/usr/bin/env python3
 from pathlib import Path
 from flydeploy import (
-    preflight, load_deployment, confirm_destroy,
+    ask_mode, preflight, load_deployment, confirm_destroy,
     destroy_app, destroy_postgres, reset_fly_toml, find_fly_toml,
     read_app_name,
 )
@@ -94,7 +96,7 @@ DEPLOYMENT_PATH = ROOT / "deployment.json"
 PLACEHOLDER = "my-app-placeholder"
 
 if __name__ == "__main__":
-    print("\nTeardown\n" + "=" * 40)
+    fast = ask_mode()
 
     preflight()
 
@@ -122,6 +124,7 @@ if __name__ == "__main__":
 ### API at a glance
 
 **Core** (`flydeploy.core`):
+- `ask_mode()` -- ask fast or interactive; returns True for fast
 - `open_log(path, history_dir=None)` -- start logging with rotation
 - `close_log()` -- close log file
 - `run(cmd, *, cwd, capture, passthrough)` -- subprocess with logging
