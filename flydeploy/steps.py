@@ -160,15 +160,38 @@ def _extract_pg_secrets(output):
     return secrets, redacted
 
 
+def _detect_app_region(app_name):
+    """Query Fly for the primary region of an app. Returns region code or None."""
+    r = run(["fly", "status", "--app", app_name, "--json"], capture=True)
+    if r.returncode != 0:
+        return None
+    try:
+        data = json.loads(r.stdout or "{}")
+        # fly status --json may have different shapes; try common paths
+        machines = data.get("Machines") or []
+        if machines:
+            return machines[0].get("region")
+        return data.get("App", {}).get("PlatformVersion") and None
+    except (json.JSONDecodeError, TypeError, IndexError):
+        return None
+
+
 def setup_postgres(app_name, pg_name=None, *, recover=True,
-                   secrets_path=None):
+                   secrets_path=None, region=None,
+                   initial_cluster_size=None):
     """Set up and attach a Postgres cluster.
 
-    pg_name:      cluster name (defaults to {app_name}-db).
-    recover:      if True, attempt to restart stopped machines or offer
-                  to recreate broken clusters.
-    secrets_path: if given, Postgres credentials are saved to this
-                  SECRETS.json file.
+    pg_name:              cluster name (defaults to {app_name}-db).
+    recover:              if True, attempt to restart stopped machines or
+                          offer to recreate broken clusters.
+    secrets_path:         if given, Postgres credentials are saved to this
+                          SECRETS.json file.
+    region:               Fly region code (e.g. "lhr"). If given, passed
+                          to 'fly postgres create --region' to skip the
+                          interactive region prompt.
+    initial_cluster_size: number of Postgres machines. If given, passed
+                          to 'fly postgres create --initial-cluster-size'
+                          to skip the default of 2.
 
     Returns the pg_name used, or None if DATABASE_URL was already set.
     """
@@ -184,10 +207,16 @@ def setup_postgres(app_name, pg_name=None, *, recover=True,
     r = run(["fly", "postgres", "list"], capture=True)
     pg_list = r.stdout or ""
 
+    pg_create_cmd = ["fly", "postgres", "create", "--name", pg_name]
+    if region:
+        pg_create_cmd.extend(["--region", region])
+    if initial_cluster_size is not None:
+        pg_create_cmd.extend(["--initial-cluster-size",
+                              str(initial_cluster_size)])
+
     if pg_name not in pg_list:
         print(f"      Creating Postgres cluster '{pg_name}'...")
-        result = run(["fly", "postgres", "create", "--name", pg_name],
-                     passthrough=True)
+        result = run(pg_create_cmd, passthrough=True)
         if result.returncode != 0:
             sys.exit(f"Failed to create Postgres cluster '{pg_name}'.")
     elif recover:
@@ -201,9 +230,7 @@ def setup_postgres(app_name, pg_name=None, *, recover=True,
                 if r.returncode != 0:
                     sys.exit(f"Failed to destroy cluster '{pg_name}'.")
                 print(f"      Creating Postgres cluster '{pg_name}'...")
-                result = run(
-                    ["fly", "postgres", "create", "--name", pg_name],
-                    passthrough=True)
+                result = run(pg_create_cmd, passthrough=True)
                 if result.returncode != 0:
                     sys.exit("Failed to create Postgres cluster.")
             else:
@@ -230,7 +257,12 @@ def setup_postgres(app_name, pg_name=None, *, recover=True,
     if redacted.strip():
         print(redacted)
 
-    return pg_name
+    # Detect the region the cluster ended up in
+    actual_region = _detect_app_region(pg_name)
+    if actual_region:
+        print(f"      Postgres region: {actual_region}")
+
+    return pg_name, actual_region
 
 
 # ---------------------------------------------------------------------------
