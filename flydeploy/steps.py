@@ -201,7 +201,7 @@ def setup_postgres(app_name, pg_name=None, *, recover=True,
     # Already attached?
     r = run(["fly", "secrets", "list", "--app", app_name], capture=True)
     if "DATABASE_URL" in (r.stdout or ""):
-        return None
+        return None, None
 
     if pg_name is None:
         pg_name = f"{app_name}-db"
