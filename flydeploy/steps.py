@@ -422,13 +422,14 @@ def smoke_test(app_name, *, path="/", timeout=15):
     """GET the deployed app and check for a response.
 
     Returns True on success, False on failure.
+    Silent on success; prints diagnostics on failure.
     """
     url = f"https://{app_name}.fly.dev{path}"
     try:
         with urllib.request.urlopen(url, timeout=timeout) as resp:
-            print(f"      GET {url} -> {resp.status}")
             return resp.status < 400
     except Exception as e:
+        print(f"\n[Smoke test]")
         print(f"      Could not reach {url}: {e}")
         print(f"      (app may still be starting -- check: "
               f"fly logs --app {app_name})")
