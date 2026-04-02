@@ -4,6 +4,6 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "flydeploy"
-version = "0.3.1"
+version = "0.3.2"
 description = "Shared Fly.io deployment toolkit"
 requires-python = ">=3.10"
