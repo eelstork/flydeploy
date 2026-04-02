@@ -82,7 +82,9 @@ def create_app(app_name):
         sys.exit("Failed to list Fly apps -- check your connection.")
     if app_name in r.stdout:
         return False
-    run(["fly", "apps", "create", app_name])
+    result = run(["fly", "apps", "create", app_name])
+    if result.returncode != 0:
+        sys.exit(f"Failed to create app '{app_name}'.")
     return True
 
 
