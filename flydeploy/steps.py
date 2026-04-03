@@ -9,7 +9,9 @@ from pathlib import Path
 from typing import Callable
 
 from .core import run, prompt
-from .state import load_secrets, save_secrets, update_secret
+from .state import (load_secrets, save_secrets, update_secret,
+                    read_primary_region, clear_primary_region,
+                    read_vm_config, clear_vm_config)
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +162,7 @@ def _extract_pg_secrets(output):
     return secrets, redacted
 
 
-def _detect_app_region(app_name):
+def detect_region(app_name):
     """Query Fly for the primary region of an app. Returns region code or None."""
     r = run(["fly", "status", "--app", app_name, "--json"], capture=True)
     if r.returncode != 0:
@@ -262,7 +264,7 @@ def setup_postgres(app_name, pg_name=None, *, recover=True,
         print(redacted)
 
     # Detect the region the cluster ended up in
-    actual_region = _detect_app_region(pg_name)
+    actual_region = detect_region(pg_name)
     if actual_region:
         print(f"      Postgres region: {actual_region}")
 
@@ -389,6 +391,43 @@ def configure_secrets(app_name, defs, *, fast=True, secrets_path):
         print("      No new secrets to set.")
 
     return to_set
+
+
+# ---------------------------------------------------------------------------
+# Pre-deploy: review and clear fly.toml config for interactive prompts
+# ---------------------------------------------------------------------------
+
+def review_fly_config(fly_toml):
+    """Report current region and VM config, then clear them from fly.toml.
+
+    Call this before deploy() in interactive mode so that the Fly CLI
+    prompts for region and VM size.
+
+    Returns {"region": str|None, "vm": dict|None} with previous values.
+    Pass these to write_primary_region / write_vm_config to restore later.
+    """
+    region = read_primary_region(fly_toml)
+    vm = read_vm_config(fly_toml)
+
+    if region:
+        print(f"  Region: {region}")
+    else:
+        print(f"  Region: not set")
+
+    if vm:
+        parts = []
+        if "cpu_kind" in vm:
+            parts.append(vm["cpu_kind"])
+        if "cpus" in vm:
+            parts.append(f"{vm['cpus']} CPU")
+        if "memory" in vm:
+            parts.append(vm["memory"])
+        print(f"  VM: {', '.join(parts)}")
+
+    clear_primary_region(fly_toml)
+    clear_vm_config(fly_toml)
+
+    return {"region": region, "vm": vm}
 
 
 # ---------------------------------------------------------------------------
