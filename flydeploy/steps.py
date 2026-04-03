@@ -409,7 +409,7 @@ def deploy(*, fly_toml=None, cwd=None):
             cwd = fly_toml.parent
         elif fly_toml.parent.resolve() != Path(cwd).resolve():
             cmd.extend(["--config", str(fly_toml)])
-    result = run(cmd, cwd=cwd)
+    result = run(cmd, cwd=cwd, passthrough=True)
     if hasattr(result, "returncode") and result.returncode != 0:
         sys.exit("Deployment failed.")
 
